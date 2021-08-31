@@ -29,7 +29,9 @@ public class SpotifyLogin {
     private var clientID: String?
     private var clientSecret: String?
     private var redirectURL: URL?
-
+    public var authCode: String?
+    var shouldCreateSession: Bool = false
+    
     internal var session: Session? {
         didSet {
             SessionLocalStorage.save(session: session)
@@ -59,7 +61,7 @@ public class SpotifyLogin {
         self.urlBuilder = URLBuilder(clientID: clientID, clientSecret: clientSecret, redirectURL: redirectURL)
     }
 
-    /// Asynchronous call to retrieve the session's auth token. Automatically refreshes if auth token expired. 
+    /// Asynchronous call to retrieve the session's auth token. Automatically refreshes if auth token expired.
     ///
     /// - Parameter completion: Returns the auth token as a string if available and an optional error.
     public func getAccessToken(completion:@escaping (String?, Error?) -> Void) {
@@ -126,19 +128,24 @@ public class SpotifyLogin {
 
         let parsedURL = urlBuilder.parse(url: url)
         if let code = parsedURL.code, !parsedURL.error {
-            Networking.createSession(code: code,
-                                     redirectURL: redirectURL,
-                                     clientID: clientID,
-                                     clientSecret: clientSecret,
-                                     completion: { [weak self] session, error in
-                DispatchQueue.main.async {
-                    if error == nil {
-                        self?.session = session
-                        NotificationCenter.default.post(name: .SpotifyLoginSuccessful, object: nil)
+            if shouldCreateSession {
+                Networking.createSession(code: code,
+                                         redirectURL: redirectURL,
+                                         clientID: clientID,
+                                         clientSecret: clientSecret,
+                                         completion: { [weak self] session, error in
+                    DispatchQueue.main.async {
+                        if error == nil {
+                            self?.session = session
+                            NotificationCenter.default.post(name: .SpotifyLoginSuccessful, object: nil)
+                        }
+                        completion(error)
                     }
-                    completion(error)
-                }
-            })
+                })
+            } else {
+                self.authCode = code
+                NotificationCenter.default.post(name: .SpotifyLoginSuccessful, object: nil)
+            }
         } else {
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .SpotifyLoginSuccessful, object: nil)
